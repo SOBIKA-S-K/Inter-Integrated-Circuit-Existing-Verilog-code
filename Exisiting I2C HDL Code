@@ -1,0 +1,92 @@
+# master HDLcode 
+module i2c_master (
+    input wire clk,
+    input wire rst,
+    input wire start, // trigger transfer
+    input wire [6:0] slave_addr, // 7-bit address
+    input wire [7:0] data_in, // data to send
+    output reg scl,
+    inout wire sda,
+    output reg done
+);
+
+    reg [3:0] state;
+    reg [3:0] bit_cnt;
+    reg sda_out;
+    reg sda_oe; // output enable
+
+    assign sda = (sda_oe) ? sda_out : 1'bz; // open-drain behavior
+
+    localparam IDLE = 4'd0,
+               START = 4'd1,
+               ADDR = 4'd2,
+               ACK1 = 4'd3,
+               DATA = 4'd4,
+               ACK2 = 4'd5,
+               STOP = 4'd6,
+               DONE = 4'd7;
+
+    always @(posedge clk or posedge rst) begin
+        if (rst) begin
+            state <= IDLE;
+            scl <= 1;
+            sda_out <= 1;
+            sda_oe <= 1;
+            done <= 0;
+            bit_cnt <= 0;
+        end else begin
+            case (state)
+                IDLE: begin
+                    done <= 0;
+                    if (start) begin
+                        state <= START;
+                    end
+                end
+                START: begin
+                    sda_out <= 0; // SDA low while SCL high = START
+                    sda_oe <= 1;
+                    state <= ADDR;
+                    bit_cnt <= 6; // send 7-bit addr
+                end
+                ADDR: begin
+                    scl <= 0;
+                    sda_out <= slave_addr[bit_cnt];
+                    scl <= 1;
+                    if (bit_cnt == 0) state <= ACK1;
+                    else bit_cnt <= bit_cnt - 1;
+                end
+                ACK1: begin
+                    scl <= 0;
+                    sda_oe <= 0; // release SDA (wait for slave ACK)
+                    scl <= 1;
+                    state <= DATA;
+                    bit_cnt <= 7;
+                    sda_oe <= 1;
+                end
+                DATA: begin
+                    scl <= 0;
+                    sda_out <= data_in[bit_cnt];
+                    scl <= 1;
+                    if (bit_cnt == 0) state <= ACK2;
+                    else bit_cnt <= bit_cnt - 1;
+                end
+                ACK2: begin
+                    scl <= 0;
+                    sda_oe <= 0; // release for ACK
+                    scl <= 1;
+                    state <= STOP;
+                    sda_oe <= 1;
+                end
+                STOP: begin
+                    scl <= 1;
+                    sda_out <= 1; // SDA high while SCL high = STOP
+                    state <= DONE;
+                end
+                DONE: begin
+                    done <= 1;
+                    state <= IDLE;
+                end
+            endcase
+        end
+    end
+endmodule
