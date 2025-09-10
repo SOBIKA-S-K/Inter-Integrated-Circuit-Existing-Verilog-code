@@ -1,0 +1,53 @@
+# testbench code 
+module tb_i2c;
+
+    reg clk, rst, start;
+    reg [6:0] slave_addr = 7'b1010000;
+    reg [7:0] data_in = 8'hAB;
+    wire scl;
+    wire sda;
+    wire done;
+    wire [7:0] data_out;
+    wire valid;
+
+    // Master
+    i2c_master master(
+        .clk(clk),
+        .rst(rst),
+        .start(start),
+        .slave_addr(slave_addr),
+        .data_in(data_in),
+        .scl(scl),
+        .sda(sda),
+        .done(done)
+    );
+
+    // Slave
+    i2c_slave slave(
+        .clk(clk),
+        .rst(rst),
+        .my_addr(7'b1010000),
+        .scl(scl),
+        .sda(sda),
+        .data_out(data_out),
+        .valid(valid)
+    );
+
+    initial begin
+        clk = 0;
+        forever #5 clk = ~clk;
+    end
+
+    initial begin
+        rst = 1; start = 0;
+        #20 rst = 0;
+        #20 start = 1;
+        #10 start = 0;
+        #500 $stop;
+    end
+
+    initial begin
+        $monitor("Time=%0t scl=%b sda=%b done=%b valid=%b data_out=%h",
+                 $time, scl, sda, done, valid, data_out);
+    end
+endmodule
